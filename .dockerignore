@@ -1,0 +1,13 @@
+.git
+node_modules
+vendor
+public/build
+public/storage
+storage/logs/*.log
+storage/framework/cache/data/*
+storage/framework/sessions/*
+storage/framework/views/*
+.env
+app.zip
+*.sql
+tests
