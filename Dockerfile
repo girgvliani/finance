@@ -14,8 +14,12 @@ RUN apt-get update && apt-get install -y \
         libzip-dev libpng-dev libjpeg-dev libfreetype6-dev unzip git \
     && docker-php-ext-configure gd --with-freetype --with-jpeg \
     && docker-php-ext-install pdo_mysql zip gd \
-    && a2enmod rewrite \
     && rm -rf /var/lib/apt/lists/*
+
+# mod_php requires exactly ONE MPM (prefork). Disable any others to avoid
+# "AH00534: More than one MPM loaded", then enable prefork + rewrite.
+RUN a2dismod mpm_event mpm_worker 2>/dev/null || true; \
+    a2enmod mpm_prefork rewrite
 
 # Composer (copied from the official Composer image).
 COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
