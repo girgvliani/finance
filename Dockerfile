@@ -16,11 +16,15 @@ RUN apt-get update && apt-get install -y \
     && docker-php-ext-install pdo_mysql zip gd \
     && rm -rf /var/lib/apt/lists/*
 
-# mod_php requires exactly ONE MPM (prefork). Disable any others to avoid
-# "AH00534: More than one MPM loaded", then enable prefork + rewrite.
-RUN a2dismod mpm_event mpm_worker 2>/dev/null || true \
- && a2enmod mpm_prefork rewrite \
- && [ "$(apache2ctl -M 2>/dev/null | grep -ci 'mpm_')" = "1" ]
+# mod_php requires exactly ONE MPM (prefork). Physically remove any event/worker
+# symlinks so this doesn't depend on a2dismod's exit code, enable prefork +
+# rewrite, then assert exactly one MPM is loaded — fail the BUILD if not.
+RUN set -eux; \
+    rm -f /etc/apache2/mods-enabled/mpm_event.* \
+          /etc/apache2/mods-enabled/mpm_worker.*; \
+    a2enmod mpm_prefork rewrite; \
+    apache2ctl -M 2>/dev/null | grep -i mpm; \
+    [ "$(apache2ctl -M 2>/dev/null | grep -ci mpm_)" = "1" ]
 
 # Composer (copied from the official Composer image).
 COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
