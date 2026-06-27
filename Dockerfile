@@ -16,16 +16,21 @@ RUN apt-get update && apt-get install -y \
     && docker-php-ext-install pdo_mysql zip gd \
     && rm -rf /var/lib/apt/lists/*
 
-# mod_php requires exactly ONE MPM (prefork). Build the mods-enabled state
-# deterministically: delete EVERY mpm symlink, then link ONLY prefork. This does
-# not depend on a2enmod/a2dismod and cannot fail the build, so the image always
-# ships and the runtime diagnostic in the entrypoint can report what loaded.
+# mod_php requires exactly ONE MPM. Previous symlink-only fixes failed because a
+# second MPM is loaded OUTSIDE mods-enabled (a stray LoadModule line or an Include
+# that pulls in mods-available). So make event/worker impossible to load anywhere:
+#   1. delete the event/worker module files from BOTH mods-available and mods-enabled
+#   2. strip any direct "LoadModule mpm_*" lines from every config Apache includes
+#   3. enable exactly prefork (+ rewrite) via the standard mechanism
 RUN set -eux; \
-    rm -f /etc/apache2/mods-enabled/mpm_*.load /etc/apache2/mods-enabled/mpm_*.conf; \
-    ln -s /etc/apache2/mods-available/mpm_prefork.load /etc/apache2/mods-enabled/mpm_prefork.load; \
-    ln -s /etc/apache2/mods-available/mpm_prefork.conf /etc/apache2/mods-enabled/mpm_prefork.conf; \
-    a2enmod rewrite; \
-    grep -rIl "LoadModule[[:space:]]\+mpm_\(event\|worker\)_module" /etc/apache2 || true
+    rm -f /etc/apache2/mods-*/mpm_event.* /etc/apache2/mods-*/mpm_worker.*; \
+    for f in /etc/apache2/apache2.conf /etc/apache2/ports.conf \
+             /etc/apache2/conf-enabled/* /etc/apache2/sites-enabled/*; do \
+        [ -f "$f" ] && sed -ri '/^[[:space:]]*LoadModule[[:space:]]+mpm_/d' "$f" || true; \
+    done; \
+    a2enmod mpm_prefork rewrite; \
+    echo "=== build-time: remaining MPM LoadModule lines ==="; \
+    grep -rn "LoadModule.*mpm" /etc/apache2/ || true
 
 # Composer (copied from the official Composer image).
 COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
