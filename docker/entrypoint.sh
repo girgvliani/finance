@@ -19,14 +19,19 @@ php artisan config:cache
 php artisan route:cache
 php artisan view:cache
 
-# --- MPM diagnostic: show exactly what Apache is about to load ---------------
+# --- Force exactly ONE MPM (prefork) at RUNTIME -----------------------------
+# A stale cached image layer can leave both mpm_event and mpm_prefork enabled,
+# which makes Apache abort with "AH00534: More than one MPM loaded". Doing this
+# here (not just in the Dockerfile) guarantees it runs on every boot, immune to
+# Docker/Railway build-layer caching. Removing the event/worker symlinks from
+# mods-enabled leaves prefork as the only enabled MPM.
+rm -f /etc/apache2/mods-enabled/mpm_event.* /etc/apache2/mods-enabled/mpm_worker.*
+[ -e /etc/apache2/mods-enabled/mpm_prefork.load ] || a2enmod mpm_prefork || true
+
+# --- MPM diagnostic: confirm exactly one MPM is now enabled ------------------
 echo "===== MPM DIAGNOSTIC START ====="
-echo "--- mpm files in mods-enabled / mods-available ---"
-ls -la /etc/apache2/mods-enabled/ /etc/apache2/mods-available/ 2>&1 | grep -i mpm || echo "(none)"
-echo "--- every LoadModule mpm line under /etc/apache2 (file:line) ---"
-grep -rn "LoadModule.*mpm" /etc/apache2/ 2>&1 || echo "(none found)"
-echo "--- any Include pulling in mods-available ---"
-grep -rn "mods-available" /etc/apache2/ 2>&1 || echo "(none)"
+echo "--- enabled MPM symlinks in mods-enabled ---"
+ls -la /etc/apache2/mods-enabled/ 2>&1 | grep -i mpm || echo "(none)"
 echo "===== MPM DIAGNOSTIC END ====="
 
 exec apache2-foreground
