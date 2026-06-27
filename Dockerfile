@@ -39,7 +39,12 @@ WORKDIR /var/www/html
 
 # Install PHP deps first (better build caching).
 COPY composer.json composer.lock ./
-RUN composer install --no-dev --no-scripts --no-autoloader --prefer-dist --no-interaction
+# codeload.github.com intermittently returns HTTP 400 on dist zips. Allow root
+# (silences the plugin warning) and fall back to installing from git source if the
+# dist download fails, so a transient 400 doesn't kill the whole build.
+ENV COMPOSER_ALLOW_SUPERUSER=1
+RUN composer install --no-dev --no-scripts --no-autoloader --prefer-dist --no-interaction \
+ || composer install --no-dev --no-scripts --no-autoloader --prefer-source --no-interaction
 
 # App source + built assets.
 COPY . .
