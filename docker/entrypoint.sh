@@ -7,21 +7,27 @@ sed -ri "s/^Listen .*/Listen ${PORT}/" /etc/apache2/ports.conf
 
 # Write a correct vhost on every boot (cache-immune). DocumentRoot MUST be
 # Laravel's public/ dir, and that dir must be granted access — otherwise Apache
-# serves the project root and 403s with "AH01630: client denied". Generating the
-# file here avoids the fragile ${APACHE_DOCUMENT_ROOT} sed substitution that
-# resolved to the wrong path.
-cat > /etc/apache2/sites-available/000-default.conf <<EOF
-<VirtualHost *:${PORT}>
+# serves the project root and 403s with "AH01630: client denied". We write the
+# config and ALSO write it directly into sites-enabled (and disable any other
+# enabled site) because Apache loads from sites-enabled, not sites-available.
+VHOST_CONF='<VirtualHost *:__PORT__>
     DocumentRoot /var/www/html/public
     <Directory /var/www/html/public>
         Options Indexes FollowSymLinks
         AllowOverride All
         Require all granted
     </Directory>
-    ErrorLog \${APACHE_LOG_DIR}/error.log
-    CustomLog \${APACHE_LOG_DIR}/access.log combined
-</VirtualHost>
-EOF
+    ErrorLog ${APACHE_LOG_DIR}/error.log
+    CustomLog ${APACHE_LOG_DIR}/access.log combined
+</VirtualHost>'
+
+# substitute the real port
+VHOST_CONF="${VHOST_CONF/__PORT__/${PORT}}"
+
+# remove every existing enabled site, then write ours as the only one
+rm -f /etc/apache2/sites-enabled/*
+printf '%s\n' "$VHOST_CONF" > /etc/apache2/sites-available/000-default.conf
+printf '%s\n' "$VHOST_CONF" > /etc/apache2/sites-enabled/000-default.conf
 
 # Ensure a public storage symlink exists (for receipt images).
 if [ ! -e public/storage ]; then
