@@ -19,4 +19,11 @@ php artisan config:cache
 php artisan route:cache
 php artisan view:cache
 
+# --- MPM diagnostic: show exactly what Apache is about to load ---------------
+echo "===== MPM DIAGNOSTIC (mods-enabled) ====="
+ls -la /etc/apache2/mods-enabled/ | grep -i mpm || echo "(no mpm symlinks found)"
+echo "===== MPM DIAGNOSTIC (apache2ctl -M) ====="
+apache2ctl -M 2>&1 | grep -i mpm || echo "(apache2ctl reported no mpm / errored above)"
+echo "=========================================="
+
 exec apache2-foreground
